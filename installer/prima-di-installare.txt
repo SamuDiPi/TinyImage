@@ -1,0 +1,16 @@
+Alleggerisci - foto e schermate più leggere (software libero, GNU GPL v3 o successiva)
+
+Cosa fa
+Alleggerisce le foto JPEG e le immagini PNG senza perdita di qualità visibile, oppure lasciandole identiche al
+pixel. Di default non tocca gli originali: le copie leggere vanno nella cartella "alleggerite" accanto a loro.
+
+Privacy
+Il programma non si collega a internet e non raccoglie dati: le immagini restano sul computer. Di default toglie
+dalle copie la posizione GPS e i dati della fotocamera.
+
+Avvertenze
+È una prima versione: tenere gli originali finché non si è controllato il risultato. Scegliendo "Al posto degli
+originali", gli originali vanno nel Cestino di Windows. Distribuito senza alcuna garanzia (vedi la licenza).
+
+Windows può mostrare l'avviso "autore sconosciuto": l'installatore non è firmato digitalmente.
+Chi preferisce non installare può usare la versione portabile (zip), che non scrive nulla nel sistema.

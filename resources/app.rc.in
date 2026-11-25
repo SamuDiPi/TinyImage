@@ -1,0 +1,23 @@
+IDI_ICON1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/alleggerisci.ico"
+
+#include <winver.h>
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION @ver_comma@
+PRODUCTVERSION @ver_comma@
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041004B0"
+    BEGIN
+      VALUE "FileDescription", "Alleggerisci - foto e schermate piu leggere"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "ProductName", "Alleggerisci"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+      VALUE "LegalCopyright", "Copyright (C) 2026 SamuDiPi - GNU GPL v3"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0410, 1200
+  END
+END

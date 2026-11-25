@@ -1,0 +1,20 @@
+Alleggerisci - versione portabile
+
+Come si usa
+1. Scompatta la cartella "Alleggerisci" dove vuoi: Documenti, una chiavetta, un disco esterno.
+2. Avvia Alleggerisci.exe.
+3. Trascina nella finestra foto, schermate o cartelle intere: partono subito.
+   Le copie leggere vanno nella cartella "alleggerite" accanto agli originali, che non vengono toccati.
+4. Doppio clic su una riga per confrontare prima e dopo.
+
+Portabile vuol dire che non installa nulla: le scelte (qualità, dove salvare) si salvano nel file portabile.ini di
+questa cartella, non nel registro di Windows. Per toglierlo basta cancellare la cartella.
+Se cancelli portabile.ini il programma usa le impostazioni di Windows dell'utente, come la versione installata.
+
+Privacy: il programma non si collega a internet e non raccoglie dati. Le immagini restano sul computer.
+
+Windows può chiedere conferma al primo avvio ("autore sconosciuto"): il programma non è firmato digitalmente.
+"Ulteriori informazioni" > "Esegui comunque".
+
+Software libero (GNU GPL v3 o successiva), senza alcuna garanzia: LICENSE.txt. Licenze e sorgenti delle librerie:
+LICENZE-TERZE-PARTI.txt. Sorgenti e segnalazioni: https://github.com/SamuDiPi/TinyImage
