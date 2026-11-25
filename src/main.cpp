@@ -20,6 +20,8 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPalette>
+#include <QStyleHints>
 #include <QSettings>
 #include <QStyleFactory>
 #include <QTimer>
@@ -78,10 +80,61 @@ int runCommandLine(const QStringList& args)
     return errors == 0 ? 0 : 1;
 }
 
+// Tavolozza chiara completa. `fromDark` (solo per le prove): parte da una tavolozza scura come quella che arriva dal
+// tema scuro di Windows, per controllare che nessun colore resti quello del sistema.
+QPalette lightPalette(bool fromDark)
+{
+    QPalette p;
+    if (fromDark)
+        for (int g = 0; g < QPalette::NColorGroups; ++g)
+            for (int r = 0; r < QPalette::NColorRoles; ++r)
+                p.setColor(QPalette::ColorGroup(g), QPalette::ColorRole(r),
+                           r == QPalette::WindowText || r == QPalette::Text || r == QPalette::ButtonText || r == QPalette::BrightText
+                                   || r == QPalette::ToolTipText || r == QPalette::HighlightedText || r == QPalette::PlaceholderText
+                               ? QColor(255, 255, 255) : QColor(32, 32, 32));
+    const QColor text(17, 24, 39), muted(156, 163, 175);
+    p.setColor(QPalette::Window, QColor(247, 248, 250));
+    p.setColor(QPalette::WindowText, text);
+    p.setColor(QPalette::Base, Qt::white);
+    p.setColor(QPalette::AlternateBase, QColor(249, 250, 251));
+    p.setColor(QPalette::Text, text);
+    p.setColor(QPalette::Button, Qt::white);
+    p.setColor(QPalette::ButtonText, text);
+    p.setColor(QPalette::BrightText, Qt::white);
+    p.setColor(QPalette::ToolTipBase, Qt::white);
+    p.setColor(QPalette::ToolTipText, text);
+    p.setColor(QPalette::PlaceholderText, muted);
+    p.setColor(QPalette::Highlight, QColor(37, 99, 235));
+    p.setColor(QPalette::HighlightedText, Qt::white);
+    p.setColor(QPalette::Link, QColor(37, 99, 235));
+    p.setColor(QPalette::LinkVisited, QColor(37, 99, 235));
+    p.setColor(QPalette::Light, Qt::white);
+    p.setColor(QPalette::Midlight, QColor(229, 231, 235));
+    p.setColor(QPalette::Mid, QColor(209, 213, 219));
+    p.setColor(QPalette::Dark, QColor(156, 163, 175));
+    p.setColor(QPalette::Shadow, QColor(107, 114, 128));
+    for (QPalette::ColorRole r : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText})
+        p.setColor(QPalette::Disabled, r, muted);
+    return p;
+}
+
 QString styleSheet()
 {
+    // Ogni colore è fissato qui (testo compreso): l'aspetto non dipende dal tema chiaro o scuro di Windows.
     return QStringLiteral(R"(
-        QMainWindow, QDialog { background: #f7f8fa; }
+        QWidget { color: #111827; }
+        QMainWindow, QDialog, QMessageBox { background: #f7f8fa; }
+        QLabel { background: transparent; color: #111827; }
+        QCheckBox { color: #111827; background: transparent; }
+        QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #9ca3af; border-radius: 4px; background: #ffffff; }
+        QCheckBox::indicator:checked { background: #2563eb; border-color: #2563eb; image: url(:/spunta.png); }
+        QToolTip { color: #111827; background: #ffffff; border: 1px solid #d1d5db; }
+        QHeaderView::section { color: #374151; background: #f3f4f6; border: none; border-right: 1px solid #e5e7eb; padding: 4px 6px; }
+        QComboBox QAbstractItemView { color: #111827; background: #ffffff; selection-background-color: #dbeafe; selection-color: #111827; }
+        QComboBox:disabled { color: #9ca3af; background: #f3f4f6; }
+        QScrollBar:vertical { background: #f3f4f6; width: 12px; }
+        QScrollBar::handle:vertical { background: #c7cbd1; border-radius: 5px; min-height: 24px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QLabel#title { font-size: 22pt; font-weight: 600; color: #111827; }
         QLabel#subtitle { color: #4b5563; font-size: 10.5pt; }
         QFrame#drop { border: 2px dashed #9ca3af; border-radius: 16px; background: #ffffff; min-height: 110px; }
@@ -90,7 +143,7 @@ QString styleSheet()
         QLabel#dropHint { color: #6b7280; }
         QFrame#options { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; }
         QLabel#summary { font-size: 11pt; font-weight: 600; color: #14532d; }
-        QPushButton { padding: 7px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; }
+        QPushButton { padding: 7px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; color: #111827; }
         QPushButton:hover { background: #f3f4f6; }
         QPushButton:disabled { color: #9ca3af; }
         QPushButton#primary { background: #2563eb; color: white; border-color: #2563eb; font-weight: 600; }
@@ -99,8 +152,8 @@ QString styleSheet()
         QPushButton#flat { border: none; background: transparent; color: #2563eb; }
         QPushButton#segment { border-radius: 0; padding: 7px 14px; min-width: 150px; }
         QPushButton#segment:checked { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; font-weight: 600; }
-        QTreeWidget { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; alternate-background-color: #f9fafb; }
-        QComboBox { padding: 5px 8px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; }
+        QTreeWidget { color: #111827; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; alternate-background-color: #f9fafb; }
+        QComboBox { padding: 5px 8px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; color: #111827; }
         QProgressBar { border: none; background: #e5e7eb; border-radius: 3px; }
         QProgressBar::chunk { background: #2563eb; border-radius: 3px; }
     )");
@@ -125,6 +178,9 @@ int main(int argc, char** argv)
     QApplication::setApplicationVersion(QStringLiteral(ALLEGGERISCI_VERSION));
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/alleggerisci.png")));
     QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    // Tema chiaro fisso: con il tema scuro di Windows il testo diventava bianco sugli sfondi chiari del programma.
+    QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
+    QApplication::setPalette(lightPalette(qEnvironmentVariableIsSet("ALLEGGERISCI_PROVA_TEMA_SCURO")));
     QFont font(QStringLiteral("Segoe UI"));
     font.setPointSizeF(10);
     QApplication::setFont(font);

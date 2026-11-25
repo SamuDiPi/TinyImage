@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>alleggerisci.png</file>
+        <file>spunta.png</file>
     </qresource>
 </RCC>
