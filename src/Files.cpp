@@ -39,37 +39,68 @@ void keepTime(const QString& path, const QDateTime& modified)
 
 } // namespace
 
-QStringList collectImages(const QStringList& paths, int limit)
+QList<ImageItem> collectImages(const QStringList& paths, const QString& exclude, int limit)
 {
-    QStringList out;
+    QList<ImageItem> out;
     QSet<QString> seen;
-    auto add = [&](const QString& file) {
-        const QString key = QFileInfo(file).absoluteFilePath().toLower();
+    const QString excluded = exclude.isEmpty() ? QString() : QFileInfo(exclude).absoluteFilePath().toLower() + u'/';
+    auto add = [&](const QString& file, const QString& relative) {
+        const QString abs = QFileInfo(file).absoluteFilePath();
+        const QString key = abs.toLower();
+        if (!excluded.isEmpty() && key.startsWith(excluded))
+            return;   // risultati già scritti nella cartella scelta
         if (!seen.contains(key) && out.size() < limit) {
             seen.insert(key);
-            out << QFileInfo(file).absoluteFilePath();
+            out.append({abs, relative});
         }
     };
     for (const QString& p : paths) {
         const QFileInfo fi(p);
         if (fi.isFile() && isImageName(fi.fileName())) {
-            add(fi.absoluteFilePath());
+            add(fi.absoluteFilePath(), fi.fileName());
         } else if (fi.isDir()) {
+            const QDir base(fi.absoluteFilePath());
+            // La cartella trascinata diventa una sottocartella del risultato (la radice di un disco no).
+            const QString prefix = base.isRoot() ? QString() : base.dirName() + u'/';
             QDirIterator it(fi.absoluteFilePath(), QDir::Files | QDir::NoSymLinks, QDirIterator::Subdirectories);
             while (it.hasNext() && out.size() < limit) {
                 const QString f = it.next();
-                const QString rel = QDir(fi.absoluteFilePath()).relativeFilePath(QFileInfo(f).absolutePath());
+                const QString rel = base.relativeFilePath(f);
                 if (rel.split(u'/').contains(kOutputFolder, Qt::CaseInsensitive))
                     continue;   // risultati di una volta precedente
                 if (isImageName(f))
-                    add(f);
+                    add(f, prefix + rel);
             }
         }
     }
     return out;
 }
 
-FileResult processFile(const QString& path, const Options& options, Destination destination)
+QString folderOutputPath(const QString& folder, const ImageItem& item, QSet<QString>* used, const QSet<QString>& owned)
+{
+    const QString base = QDir(folder).absoluteFilePath(item.relative.isEmpty() ? QFileInfo(item.path).fileName() : item.relative);
+    const QFileInfo fi(base);
+    const QString dir = fi.absolutePath() + u'/';
+    const QString stem = fi.completeBaseName(), ext = fi.suffix().isEmpty() ? QString() : u'.' + fi.suffix();
+    const QString original = QFileInfo(item.path).absoluteFilePath().toLower();
+    QString candidate = base;
+    if (candidate.toLower() == original)   // cartella scelta = cartella dell'originale: mai sovrascriverlo
+        candidate = dir + stem + QStringLiteral("-alleggerita") + ext;
+    const QString first = candidate;
+    auto taken = [&](const QString& c) {
+        const QString key = c.toLower();
+        return (used && used->contains(key)) || (QFileInfo::exists(c) && !owned.contains(key));
+    };
+    for (int n = 2; taken(candidate) && n < 100000; ++n) {
+        const QFileInfo f(first);
+        candidate = dir + f.completeBaseName() + QStringLiteral(" (%1)").arg(n) + ext;
+    }
+    if (used)
+        used->insert(candidate.toLower());
+    return candidate;
+}
+
+FileResult processFile(const QString& path, const Options& options, Destination destination, const QString& outputPath)
 {
     FileResult r;
     r.input = path;
@@ -101,13 +132,17 @@ FileResult processFile(const QString& path, const Options& options, Destination 
     r.unchanged = o.unchanged;
     r.after = o.data.size();
 
-    if (destination == Destination::Subfolder) {
-        const QString dir = fi.absolutePath() + u'/' + kOutputFolder;
+    if (destination == Destination::Subfolder || destination == Destination::Folder) {
+        r.output = destination == Destination::Folder ? outputPath : fi.absolutePath() + u'/' + kOutputFolder + u'/' + fi.fileName();
+        if (r.output.isEmpty() || QFileInfo(r.output).absoluteFilePath().compare(fi.absoluteFilePath(), Qt::CaseInsensitive) == 0) {
+            r.error = QStringLiteral("il risultato prenderebbe il posto dell'originale");   // mai, salvo con "al posto degli originali"
+            return r;
+        }
+        const QString dir = QFileInfo(r.output).absolutePath();
         if (!QDir().mkpath(dir)) {
             r.error = QStringLiteral("impossibile creare la cartella %1").arg(QDir::toNativeSeparators(dir));
             return r;
         }
-        r.output = dir + u'/' + fi.fileName();
         if (!writeFile(r.output, o.data, &r.error))
             return r;
         keepTime(r.output, modified);

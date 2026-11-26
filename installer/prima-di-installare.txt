@@ -1,8 +1,9 @@
 Alleggerisci - foto e schermate più leggere (software libero, GNU GPL v3 o successiva)
 
 Cosa fa
-Alleggerisce le foto JPEG e le immagini PNG senza perdita di qualità visibile, oppure lasciandole identiche al
-pixel. Di default non tocca gli originali: le copie leggere vanno nella cartella "alleggerite" accanto a loro.
+Alleggerisce le foto JPEG e le immagini PNG in qualità massima (senza differenze visibili), media o bassa, oppure
+lasciandole identiche al pixel. Di default non tocca gli originali: le copie leggere vanno nella cartella
+"alleggerite" accanto a loro, o in una cartella a scelta.
 
 Privacy
 Il programma non si collega a internet e non raccoglie dati: le immagini restano sul computer. Di default toglie

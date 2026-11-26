@@ -2,12 +2,13 @@
 
 // Compressione di una foto (JPEG) o di una schermata (PNG) in memoria, senza cambiare formato.
 //
-// Due modi:
-//  - Visual: "senza perdita visibile". JPEG ricompresso ad alta qualità (solo se l'originale è di qualità più alta),
-//    PNG ridotto a una tavolozza di 256 colori quando la differenza resta sotto la soglia di qualità; in ogni caso
-//    si prova anche l'ottimizzazione senza perdita e si tiene il file più piccolo.
+// Livelli di qualità:
 //  - Exact: "identica al pixel". Solo ottimizzazioni senza perdita: JPEG ricodificato senza decomprimere
 //    (stessi coefficienti), PNG ricompresso; l'immagine decodificata è identica a quella di partenza.
+//  - Maximum, Medium, Low: JPEG ricompresso alla qualità più bassa che resta sopra una soglia di somiglianza misurata
+//    (SSIM) e PNG ridotto a una tavolozza di 256 colori se resta sopra la soglia del PNG. Massima: senza differenze
+//    visibili; media: differenze minime, visibili solo ingrandendo; bassa: file molto leggeri, differenze visibili da
+//    vicino. In ogni caso si prova anche l'ottimizzazione senza perdita e si tiene il file più piccolo.
 //
 // Il risultato non è mai più grande dell'originale: se nessuna prova guadagna, resta l'originale (unchanged).
 // I file arrivano da chiunque: limiti su dimensione del file e numero di pixel, errori delle librerie gestiti
@@ -21,11 +22,11 @@
 
 namespace alleggerisci {
 
-enum class Quality { Visual, Exact };
+enum class Quality { Exact, Maximum, Medium, Low };
 
 struct Options {
-    Quality quality = Quality::Visual;
-    int maxSide = 0;            // lato lungo massimo in pixel (0 = dimensioni originali; ignorato in Exact)
+    Quality quality = Quality::Maximum;
+    int maxSide = 0;            // lato lungo massimo in pixel (0 = dimensioni originali; ignorato con Exact)
     bool stripPrivate = true;   // togli posizione GPS, dati della fotocamera, commenti e testi
 };
 

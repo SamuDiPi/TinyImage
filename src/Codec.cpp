@@ -452,20 +452,35 @@ double ssim(const Luma& a, const Luma& b)
     return n ? total / double(n) : 0.0;
 }
 
-// Soglie: misurate su foto vere (raccolta Kodak) e schermate; sotto, le differenze si cominciano a vedere da vicino.
-constexpr double kMinSimilarityPhoto = 0.975;
-constexpr double kMinSimilarityPng = 0.985;
-// Qualità JPEG provate, dalla più bassa: si tiene la prima che resta sopra la soglia. Le foto già compresse sotto la
-// prima qualità utile non si ricomprimono (perderebbero altro senza guadagno).
-const int kJpegQualities[] = {80, 84, 87, 90, 92};
-constexpr int kJpegRecompressAbove = 84;
+// Livelli: soglie di somiglianza e qualità JPEG più bassa provata. Misurati su foto vere (raccolta Kodak) e schermate:
+// sopra 0,975 non si vedono differenze; a 0,95 si notano solo ingrandendo; a 0,92 si vedono da vicino nei dettagli fini.
+struct Level {
+    double photo;      // SSIM minimo per le foto (JPEG)
+    double png;        // SSIM minimo per la tavolozza dei PNG
+    int pngQuality;    // qualità minima di libimagequant
+    int pngMinColors;  // tavolozza più piccola provata (256, 128 o 64 colori)
+    int jpegMin;       // qualità JPEG più bassa provata
+};
+Level levelOf(Quality q)
+{
+    switch (q) {
+    case Quality::Medium: return {0.950, 0.965, 75, 128, 60};
+    case Quality::Low: return {0.920, 0.940, 55, 64, 40};
+    default: return {0.975, 0.985, 90, 256, 80};
+    }
+}
+// Qualità JPEG provate, dalla più bassa: si tiene la prima che resta sopra la soglia del livello.
+const int kJpegQualities[] = {40, 45, 50, 55, 60, 65, 70, 75, 80, 84, 87, 90, 92};
 
-// La qualità più bassa che resta sopra la soglia (ricerca binaria: la somiglianza cresce con la qualità).
-bool jpegEncodeSimilar(const QImage& img, int hSamp, int vSamp, const std::vector<Marker>& markers, const QByteArray& icc,
-                       QByteArray* result, int* quality, double* similarity)
+// La qualità più bassa (dalla minima del livello) che resta sopra la soglia: ricerca binaria, la somiglianza cresce
+// con la qualità.
+bool jpegEncodeSimilar(const QImage& img, const Level& level, int hSamp, int vSamp, const std::vector<Marker>& markers,
+                       const QByteArray& icc, QByteArray* result, int* quality, double* similarity)
 {
     const Luma ref = lumaOf(img);
     int lo = 0, hi = int(std::size(kJpegQualities)) - 1, found = -1;
+    while (kJpegQualities[lo] < level.jpegMin)
+        ++lo;
     QByteArray best;
     double bestSim = 0.0;
     while (lo <= hi) {
@@ -475,7 +490,7 @@ bool jpegEncodeSimilar(const QImage& img, int hSamp, int vSamp, const std::vecto
         if (!jpegEncode(img, kJpegQualities[mid], hSamp, vSamp, markers, icc, &enc) || !jpegDecode(enc, &dec))
             return false;
         const double s = ssim(ref, lumaOf(dec));
-        if (s >= kMinSimilarityPhoto) {
+        if (s >= level.photo) {
             found = mid;
             best = enc;
             bestSim = s;
@@ -510,7 +525,8 @@ Outcome compressJpeg(const QByteArray& data, const Options& opt)
     };
     std::vector<Candidate> candidates;
     const bool cmyk = info.colorSpace == JCS_CMYK || info.colorSpace == JCS_YCCK;
-    const bool visual = opt.quality == Quality::Visual && !cmyk;
+    const bool visual = opt.quality != Quality::Exact && !cmyk;
+    const Level level = levelOf(opt.quality);
     const int longSide = std::max(info.width, info.height);
     const bool resize = visual && opt.maxSide > 0 && longSide > opt.maxSide;
 
@@ -519,7 +535,8 @@ Outcome compressJpeg(const QByteArray& data, const Options& opt)
         if (jpegLossless(data, markersToWrite(info, opt.stripPrivate, info.orientation), &lossless))
             candidates.push_back({lossless, QStringLiteral("ottimizzata senza perdita")});
     }
-    if (visual && (resize || info.quality > kJpegRecompressAbove || info.quality < 0)) {
+    // Le foto già compresse sotto la qualità minima del livello non si ricomprimono: perderebbero altro senza guadagno.
+    if (visual && (resize || info.quality > level.jpegMin || info.quality < 0)) {
         QImage img;
         if (jpegDecode(data, &img)) {
             bool resized = false;
@@ -529,7 +546,7 @@ Outcome compressJpeg(const QByteArray& data, const Options& opt)
             double similarity = 0.0;
             // I pixel sono già nell'orientamento giusto: nell'EXIF eventualmente tenuto l'orientamento diventa 1.
             const auto markers = markersToWrite(info, opt.stripPrivate, 1);
-            bool done = jpegEncodeSimilar(img, info.hSamp, info.vSamp, markers, info.icc, &encoded, &quality, &similarity);
+            bool done = jpegEncodeSimilar(img, level, info.hSamp, info.vSamp, markers, info.icc, &encoded, &quality, &similarity);
             if (!done && resized) {   // ridimensionata: serve comunque un risultato, alla qualità più alta provata
                 quality = kJpegQualities[std::size(kJpegQualities) - 1];
                 done = jpegEncode(img, quality, info.hSamp, info.vSamp, markers, info.icc, &encoded);
@@ -666,16 +683,15 @@ QByteArray writePng(const QImage& img)
 
 constexpr double kZopfliMaxSeconds = 6.0;
 
-// Tavolozza di 256 colori (libimagequant) se la qualità resta almeno kPngMinQuality: senza differenze visibili.
-constexpr int kPngMinQuality = 90;
-
-bool pngQuantize(const QImage& image, QImage* result, int* quality)
+// Tavolozza di 256 colori (libimagequant), se la qualità resta almeno quella minima del livello.
+bool pngQuantize(const QImage& image, int minQuality, int colors, QImage* result, int* quality)
 {
     const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
     liq_attr* attr = liq_attr_create();
     if (!attr)
         return false;
-    liq_set_quality(attr, kPngMinQuality, 100);
+    liq_set_quality(attr, minQuality, 100);
+    liq_set_max_colors(attr, colors);
     liq_set_speed(attr, 4);
     std::vector<void*> rows(size_t(rgba.height()));
     for (int y = 0; y < rgba.height(); ++y)
@@ -756,7 +772,8 @@ Outcome compressPng(const QByteArray& data, const Options& opt)
         if (!png.isEmpty())
             candidates.push_back({png, megabytes * (img.depth() <= 8 ? 2.4 : 6.3), method});
     };
-    const bool visual = opt.quality == Quality::Visual;
+    const bool visual = opt.quality != Quality::Exact;
+    const Level level = levelOf(opt.quality);
     const bool resize = visual && opt.maxSide > 0 && std::max(size.width(), size.height()) > opt.maxSide;
 
     if (!resize)
@@ -773,8 +790,13 @@ Outcome compressPng(const QByteArray& data, const Options& opt)
         }
         QImage indexed;
         int quality = 0;
-        if (pngQuantize(img, &indexed, &quality) && ssim(lumaOf(img), lumaOf(indexed)) >= kMinSimilarityPng)
-            add(indexed, prefix + QStringLiteral("256 colori (qualità %1/100)").arg(quality));
+        // Tavolozze da 256 colori in giù fino alla più piccola del livello, finché restano sopra la soglia.
+        const Luma ref = lumaOf(img);
+        for (int colors = 256; colors >= level.pngMinColors; colors /= 2) {
+            if (!pngQuantize(img, level.pngQuality, colors, &indexed, &quality) || ssim(ref, lumaOf(indexed)) < level.png)
+                break;
+            add(indexed, prefix + QStringLiteral("%1 colori (qualità %2/100)").arg(colors).arg(quality));
+        }
     }
     if (candidates.empty()) {
         o.error = QStringLiteral("PNG danneggiato: non si può ricomprimere");

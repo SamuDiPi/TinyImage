@@ -3,9 +3,10 @@ Alleggerisci - versione portabile
 Come si usa
 1. Scompatta la cartella "Alleggerisci" dove vuoi: Documenti, una chiavetta, un disco esterno.
 2. Avvia Alleggerisci.exe.
-3. Trascina nella finestra foto, schermate o cartelle intere: partono subito.
-   Le copie leggere vanno nella cartella "alleggerite" accanto agli originali, che non vengono toccati.
-4. Doppio clic su una riga per confrontare prima e dopo.
+3. Trascina nella finestra foto, schermate o cartelle intere: entrano nell'elenco.
+4. Scegli la qualità (Massima, Media, Bassa o Identica al pixel) e dove salvare, poi premi Avanti.
+   Di default le copie leggere vanno nella cartella "alleggerite" accanto agli originali, che non vengono toccati.
+5. Doppio clic su una riga per confrontare prima e dopo.
 
 Portabile vuol dire che non installa nulla: le scelte (qualità, dove salvare) si salvano nel file portabile.ini di
 questa cartella, non nel registro di Windows. Per toglierlo basta cancellare la cartella.

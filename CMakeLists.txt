@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(Alleggerisci
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Foto e schermate più leggere, senza perdita di qualità visibile"
     LANGUAGES CXX)
 

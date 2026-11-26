@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <tuple>
 
 using namespace alleggerisci;
 
@@ -220,12 +221,12 @@ void testJpeg()
     const QByteArray withGps = testing::encodeJpeg(photo(600, 400, 3), 95, {{0xE1, exifWithGps(6)}});
     const QImage shown = decodeImage(withGps);
     check(shown.width() == 400 && shown.height() == 600, "foto ruotata: decodificata in verticale");
-    for (Quality q : {Quality::Visual, Quality::Exact}) {
+    for (Quality q : {Quality::Maximum, Quality::Exact}) {
         Options o;
         o.quality = q;
         const Outcome out = compress(withGps, o);
         const QImage oi = decodeImage(out.data);
-        const QString name = q == Quality::Visual ? QStringLiteral("visivo") : QStringLiteral("identico");
+        const QString name = q == Quality::Maximum ? QStringLiteral("visivo") : QStringLiteral("identico");
         check(out.ok && out.data.size() < withGps.size(), QStringLiteral("GPS tolto (%1)").arg(name));
         check(!QByteArray(out.data).contains(QByteArray::fromRawData("\x25\x88\x04\x00", 4)), QStringLiteral("nessun puntatore GPS (%1)").arg(name));
         check(oi.width() == 400 && oi.height() == 600, QStringLiteral("orientamento conservato (%1): %2 x %3").arg(name).arg(oi.width()).arg(oi.height()));
@@ -238,6 +239,22 @@ void testJpeg()
         check(keep.ok && keep.data.contains(QByteArray::fromRawData("\x25\x88\x04\x00", 4)), QStringLiteral("dati tenuti a richiesta (%1)").arg(name));
         check(decodeImage(keep.data).height() == 600, QStringLiteral("dati tenuti: orientamento giusto (%1)").arg(name));
     }
+
+    // Livelli: più bassi = più leggeri, ciascuno sopra la sua soglia di somiglianza.
+    qint64 previous = v.data.size();
+    for (auto [q, threshold, name] : {std::tuple{Quality::Medium, 0.95, "media"}, std::tuple{Quality::Low, 0.92, "bassa"}}) {
+        Options o;
+        o.quality = q;
+        const Outcome lv = compress(q95, o);
+        const double sl = ssim(decodeImage(q95), decodeImage(lv.data));
+        check(lv.ok && lv.data.size() < previous && sl >= threshold,
+              QStringLiteral("JPEG qualità %1: %2 byte, SSIM %3 (%4)").arg(name).arg(lv.data.size()).arg(sl).arg(lv.method));
+        previous = lv.data.size();
+    }
+    // Una foto già compressa a qualità 70 si ricomprime solo con i livelli che scendono sotto il 70.
+    const Outcome low70 = compress(q70, [] { Options o; o.quality = Quality::Low; return o; }());
+    check(low70.ok && low70.data.size() < q70.size() * 0.9 && ssim(decodeImage(q70), decodeImage(low70.data)) >= 0.92,
+          QStringLiteral("JPEG q70, qualità bassa: %1 -> %2").arg(q70.size()).arg(low70.data.size()));
 
     // Mai più grande: il risultato ricompresso non cresce.
     const Outcome again = compress(v.data, visual);
@@ -291,12 +308,12 @@ void testPng()
     p3.setColorSpace(QColorSpace(QColorSpace::DisplayP3));
     const QByteArray withIcc = png(p3, 6);
     check(withIcc.contains("iCCP"), "PNG di prova con profilo colore");
-    for (Quality q : {Quality::Visual, Quality::Exact}) {
+    for (Quality q : {Quality::Maximum, Quality::Exact}) {
         Options o;
         o.quality = q;
         const Outcome c = compress(withIcc, o);
         check(c.ok && c.data.contains("iCCP") && decodeImage(c.data).colorSpace() == QColorSpace(QColorSpace::DisplayP3),
-              QStringLiteral("PNG: profilo colore conservato (%1)").arg(q == Quality::Visual ? "visivo" : "identico"));
+              QStringLiteral("PNG: profilo colore conservato (%1)").arg(q == Quality::Maximum ? "visivo" : "identico"));
     }
 
     // Animazione: lasciata com'era.
@@ -313,6 +330,18 @@ void testPng()
 
     const Outcome again = compress(v.data, visual);
     check(again.ok && again.data.size() <= v.data.size(), "PNG già alleggerito: non cresce");
+
+    // Livelli più bassi: la foto salvata in PNG passa a 256 colori quando la soglia lo consente.
+    qint64 previous = vp.data.size();
+    for (auto [q, threshold, name] : {std::tuple{Quality::Medium, 0.965, "media"}, std::tuple{Quality::Low, 0.94, "bassa"}}) {
+        Options o;
+        o.quality = q;
+        const Outcome lv = compress(pp, o);
+        const double sl = ssim(ph, decodeImage(lv.data));
+        check(lv.ok && lv.data.size() <= previous && (lv.unchanged || sl >= threshold),
+              QStringLiteral("foto in PNG, qualità %1: %2 byte, SSIM %3 (%4)").arg(name).arg(lv.data.size()).arg(sl).arg(lv.method));
+        previous = lv.data.size();
+    }
 }
 
 // File danneggiati o costruiti apposta: nessun arresto, mai un risultato più grande, mai "identico" con pixel diversi.
@@ -330,7 +359,7 @@ void testDamaged()
         if (i % 7 == 0)
             d.truncate(int(rng.bounded(d.size())));
         Options o;
-        o.quality = (i % 3) ? Quality::Visual : Quality::Exact;
+        o.quality = (i % 3) ? Quality::Maximum : Quality::Exact;
         const Outcome out = compress(d, o);
         check(!out.ok || out.data.size() <= d.size() || o.maxSide > 0, QStringLiteral("danneggiato %1: risultato più grande").arg(i));
         ++handled;
@@ -355,15 +384,40 @@ void testFiles()
     put(base + "/viaggio/mare.jpg", jpg);
     put(base + "/viaggio/giorno1/schermata.PNG", pn);
     put(base + "/viaggio/giorno1/note.txt", "non è un'immagine");
-    const QStringList found = collectImages({base + "/viaggio"});
+    const QList<ImageItem> found = collectImages({base + "/viaggio"});
     check(found.size() == 2, QStringLiteral("immagini trovate nella cartella: %1").arg(found.size()));
-    for (const QString& f : found) {
-        const FileResult r = processFile(f, Options(), Destination::Subfolder);
+    for (const ImageItem& f : found) {
+        const FileResult r = processFile(f.path, Options(), Destination::Subfolder);
         check(r.ok && QFile::exists(r.output) && r.after < r.before, QStringLiteral("cartella alleggerite: %1").arg(r.output));
     }
     check(QFile(base + "/viaggio/mare.jpg").size() == jpg.size(), "originale non toccato");
-    const QStringList again = collectImages({base + "/viaggio"});
+    const QList<ImageItem> again = collectImages({base + "/viaggio"});
     check(again.size() == 2, "le cartelle alleggerite non si rielaborano");
+
+    // Cartella scelta: sottocartelle conservate, nomi uguali distinti, mai sopra un originale o un file estraneo.
+    const QString out = base + "/scelta";
+    QDir().mkpath(out);
+    put(out + "/mare.jpg", "file dell'utente da non toccare");
+    QDir().mkpath(base + "/altra");
+    put(base + "/altra/mare.jpg", jpg);
+    const QList<ImageItem> items = collectImages({base + "/viaggio", base + "/altra/mare.jpg", out}, out);
+    check(items.size() == 3, QStringLiteral("cartella scelta esclusa dalla ricerca: %1 immagini").arg(items.size()));
+    QSet<QString> used;
+    QStringList outputs;
+    for (const ImageItem& it : items) {
+        const QString target = folderOutputPath(out, it, &used);
+        const FileResult r = processFile(it.path, Options(), Destination::Folder, target);
+        check(r.ok && QFile::exists(target), QStringLiteral("cartella scelta: %1").arg(target));
+        outputs << QDir(out).relativeFilePath(target);
+    }
+    outputs.sort();
+    check(outputs == QStringList({"mare (2).jpg", "viaggio/giorno1/schermata.PNG", "viaggio/mare.jpg"}),
+          QStringLiteral("nomi nella cartella scelta: %1").arg(outputs.join(", ")));
+    QFile mine(out + "/mare.jpg");
+    check(mine.open(QIODevice::ReadOnly) && mine.readAll() == "file dell'utente da non toccare", "file estraneo non sovrascritto");
+    const ImageItem self{base + "/viaggio/mare.jpg", "mare.jpg"};
+    check(folderOutputPath(base + "/viaggio", self, nullptr).endsWith("mare-alleggerita.jpg"), "cartella dell'originale: nome nuovo");
+    check(!processFile(self.path, Options(), Destination::Folder, self.path).ok, "mai al posto dell'originale");
     const FileResult missing = processFile(base + "/non-esiste.jpg", Options(), Destination::Subfolder);
     check(!missing.ok, "file mancante: errore");
 }

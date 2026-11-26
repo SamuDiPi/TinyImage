@@ -2,7 +2,8 @@
 //
 // Avvio normale: la finestra (si possono passare file e cartelle, per esempio trascinandoli sull'icona).
 // Riga di comando (per le prove e per chi la preferisce):
-//   Alleggerisci.exe --riga-di-comando [--identica] [--lato N] [--tieni-dati] [--sostituisci] <file o cartelle>...
+//   Alleggerisci.exe --riga-di-comando [--qualita massima|media|bassa|identica] [--lato N] [--tieni-dati]
+//                    [--cartella <cartella> | --sostituisci] <file o cartelle>...
 // stampa una riga JSON per immagine.
 //
 // Versione portabile: con il file "portabile.ini" accanto al programma le scelte si salvano lì (niente nel registro di
@@ -37,6 +38,7 @@ int runCommandLine(const QStringList& args)
 {
     Options opt;
     Destination dest = Destination::Subfolder;
+    QString folder;
     QStringList paths;
     for (int i = 0; i < args.size(); ++i) {
         const QString& a = args[i];
@@ -44,6 +46,24 @@ int runCommandLine(const QStringList& args)
             continue;
         if (a == QLatin1String("--identica"))
             opt.quality = Quality::Exact;
+        else if (a == QLatin1String("--qualita") && i + 1 < args.size()) {
+            const QString q = args[++i].toLower();
+            if (q == QLatin1String("massima"))
+                opt.quality = Quality::Maximum;
+            else if (q == QLatin1String("media"))
+                opt.quality = Quality::Medium;
+            else if (q == QLatin1String("bassa"))
+                opt.quality = Quality::Low;
+            else if (q == QLatin1String("identica"))
+                opt.quality = Quality::Exact;
+            else {
+                std::fprintf(stderr, "qualità sconosciuta: %s (massima, media, bassa, identica)\n", qPrintable(q));
+                return 2;
+            }
+        } else if (a == QLatin1String("--cartella") && i + 1 < args.size()) {
+            dest = Destination::Folder;
+            folder = QFileInfo(args[++i]).absoluteFilePath();
+        }
         else if (a == QLatin1String("--tieni-dati"))
             opt.stripPrivate = false;
         else if (a == QLatin1String("--sostituisci"))
@@ -56,11 +76,12 @@ int runCommandLine(const QStringList& args)
         } else
             paths << a;
     }
-    const QStringList files = collectImages(paths);
+    const QList<ImageItem> files = collectImages(paths, folder);
     int errors = 0;
     qint64 before = 0, after = 0;
-    for (const QString& f : files) {
-        const FileResult r = processFile(f, opt, dest);
+    QSet<QString> used;
+    for (const ImageItem& f : files) {
+        const FileResult r = processFile(f.path, opt, dest, dest == Destination::Folder ? folderOutputPath(folder, f, &used) : QString());
         QJsonObject o{{"file", QDir::toNativeSeparators(r.input)}, {"ok", r.ok}, {"prima", r.before}, {"dopo", r.after},
                       {"invariata", r.unchanged}, {"metodo", r.method}, {"risultato", QDir::toNativeSeparators(r.output)}};
         if (!r.ok) {
@@ -143,6 +164,8 @@ QString styleSheet()
         QLabel#dropHint { color: #6b7280; }
         QFrame#options { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; }
         QLabel#summary { font-size: 11pt; font-weight: 600; color: #14532d; }
+        QLabel#summary[waiting="true"] { color: #374151; }
+        QLabel#help { color: #4b5563; }
         QPushButton { padding: 7px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; color: #111827; }
         QPushButton:hover { background: #f3f4f6; }
         QPushButton:disabled { color: #9ca3af; }
@@ -150,7 +173,7 @@ QString styleSheet()
         QPushButton#primary:hover { background: #1d4ed8; }
         QPushButton#primary:disabled { background: #93c5fd; border-color: #93c5fd; }
         QPushButton#flat { border: none; background: transparent; color: #2563eb; }
-        QPushButton#segment { border-radius: 0; padding: 7px 14px; min-width: 150px; }
+        QPushButton#segment { border-radius: 0; padding: 7px 16px; }
         QPushButton#segment:checked { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; font-weight: 600; }
         QTreeWidget { color: #111827; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; alternate-background-color: #f9fafb; }
         QComboBox { padding: 5px 8px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; color: #111827; }
@@ -200,6 +223,8 @@ int main(int argc, char** argv)
     const QString shot = qEnvironmentVariable("ALLEGGERISCI_SCHERMATA");
     QTimer poll;
     if (!shot.isEmpty()) {
+        if (qEnvironmentVariableIsSet("ALLEGGERISCI_AVANTI"))   // come premere Avanti
+            window.go();
         QObject::connect(&poll, &QTimer::timeout, &window, [&window, &poll, shot] {
             if (window.busy())
                 return;

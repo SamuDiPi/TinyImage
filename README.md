@@ -1,11 +1,19 @@
 # Alleggerisci
 
-Foto e schermate più leggere, senza perdita di qualità visibile. Un programmino per Windows: si trascinano dentro le immagini (o cartelle intere) e partono subito.
+Foto e schermate più leggere. Un programmino per Windows in tre passi: si trascinano dentro le immagini (o cartelle intere), si scelgono qualità e dove salvarle, poi **Avanti**.
 
 - **Foto JPEG e immagini PNG**: restano dello stesso formato, quindi si aprono ovunque (Word, posta, telefoni).
-- **Senza perdita visibile** (default): le foto si ricomprimono alla qualità più bassa che resta sopra una soglia di somiglianza misurata (SSIM); le schermate passano a una tavolozza di 256 colori solo se la differenza resta sotto la soglia. Risparmio tipico: 30-50% sulle foto, 50-70% sulle schermate.
-- **Identica al pixel**: solo ottimizzazioni senza perdita. Ogni pixel resta identico, il risparmio è minore (5-30%).
-- **Gli originali non si toccano**: le copie leggere vanno nella cartella `alleggerite` accanto a loro. A scelta, al posto degli originali, che vanno nel Cestino di Windows.
+- **Quattro livelli di qualità.** Per le foto il programma prova le qualità JPEG dalla più bassa e tiene la prima che resta sopra una soglia di somiglianza misurata (SSIM); per le schermate, la tavolozza più piccola che resta sopra la soglia.
+
+  | Livello | Cosa si vede | Foto (rispetto a JPEG a qualità 95) |
+  |---|---|---|
+  | **Massima** (default) | nessuna differenza visibile | circa −30/−50% |
+  | **Media** | differenze minime, solo ingrandendo | circa −50/−70% |
+  | **Bassa** | file molto leggeri, differenze visibili da vicino | circa −70/−80% |
+  | **Identica al pixel** | ogni pixel uguale (solo ottimizzazioni senza perdita) | circa −5/−30% |
+
+- **Dove salvare**: nella cartella `alleggerite` accanto agli originali (default), in una cartella a scelta (le sottocartelle delle cartelle trascinate si conservano; nessun file che c'era già viene sovrascritto: i doppioni diventano `nome (2).jpg`), oppure al posto degli originali, che vanno nel Cestino di Windows.
+- **Prima si sceglie, poi si parte**: le immagini entrano nell'elenco come "pronte" e si possono togliere (Canc o clic destro); partono solo con **Avanti**.
 - **Confronto prima/dopo**: doppio clic su una riga, con una linea da trascinare e lo zoom.
 - **Dimensioni** (facoltativo): lato lungo massimo 3840, 2560, 1920 o 1280 pixel.
 - Un file non diventa mai più grande: se non c'è guadagno resta com'era.
@@ -23,14 +31,15 @@ Windows 10 o 11 a 64 bit. Il programma non è firmato digitalmente: al primo avv
 
 - **Nessun collegamento a internet, nessun dato raccolto.** Le immagini si elaborano sul computer e non vengono inviate a nessuno. Non ci sono account, statistiche né controlli di aggiornamento.
 - **Dati personali nelle foto.** Di default le copie non contengono posizione GPS, modello della fotocamera, data e commenti (EXIF, XMP, testi dei PNG): utile prima di condividere. Restano l'orientamento e il profilo colore. L'opzione si può spegnere.
-- **Cosa resta sul computer:** le scelte (qualità, dove salvare, ultima cartella usata, posizione della finestra) nelle impostazioni dell'utente (`HKEY_CURRENT_USER\Software\Alleggerisci`), oppure in `portabile.ini` nella versione portabile.
+- **Cosa resta sul computer:** le scelte (qualità, dove salvare, cartella scelta, ultima cartella usata, posizione della finestra) nelle impostazioni dell'utente (`HKEY_CURRENT_USER\Software\Alleggerisci`), oppure in `portabile.ini` nella versione portabile.
 - **File da fonti non fidate.** I file si leggono con libjpeg-turbo e libpng aggiornate; ci sono limiti di dimensione (300 MB, 120 milioni di pixel) e i file danneggiati vengono rifiutati senza toccarli. I test alterano centinaia di file a caso per controllarlo.
 - Per segnalare una vulnerabilità: [SECURITY.md](SECURITY.md).
 
 ## Riga di comando
 
 ```
-Alleggerisci.exe --riga-di-comando [--identica] [--lato N] [--tieni-dati] [--sostituisci] <file o cartelle>...
+Alleggerisci.exe --riga-di-comando [--qualita massima|media|bassa|identica] [--lato N] [--tieni-dati]
+                 [--cartella <cartella> | --sostituisci] <file o cartelle>...
 ```
 
 Stampa una riga JSON per immagine e una di riepilogo.
